@@ -21,6 +21,7 @@ $scheduled_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY p
         $pending_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'pending'");
         $published_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'published'");
         $failed_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'failed'");
+        $cancelled_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'cancelled'");
         ?>
         <div class="gacg-stat-item">
             <span class="gacg-stat-number"><?php echo $pending_count; ?></span>
@@ -33,6 +34,10 @@ $scheduled_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY p
         <div class="gacg-stat-item">
             <span class="gacg-stat-number"><?php echo $failed_count; ?></span>
             <div class="gacg-stat-label">Thất bại</div>
+        </div>
+        <div class="gacg-stat-item">
+            <span class="gacg-stat-number"><?php echo $cancelled_count; ?></span>
+            <div class="gacg-stat-label">Đã hủy</div>
         </div>
     </div>
 
@@ -85,17 +90,16 @@ $scheduled_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY p
                                 </button>
                             <?php elseif ($post->status === 'published'): ?>
                                 <?php
-                                // Tìm bài viết WordPress tương ứng
-                                $wp_post = get_posts(array(
-                                    'meta_key' => '_gacg_scheduled_id',
-                                    'meta_value' => $post->id,
-                                    'post_status' => 'any',
-                                    'numberposts' => 1
-                                ));
-                                if (!empty($wp_post)):
+                                // Get WordPress post ID from meta_data
+                                $meta_data = json_decode($post->meta_data, true);
+                                $wp_post_id = $meta_data['wp_post_id'] ?? null;
+                                
+                                if ($wp_post_id && get_post($wp_post_id)):
                                 ?>
-                                    <a href="<?php echo get_edit_post_link($wp_post[0]->ID); ?>" class="gacg-btn gacg-btn-sm">Chỉnh sửa</a>
-                                    <a href="<?php echo get_permalink($wp_post[0]->ID); ?>" class="gacg-btn gacg-btn-sm" target="_blank">Xem</a>
+                                    <a href="<?php echo get_edit_post_link($wp_post_id); ?>" class="gacg-btn gacg-btn-sm">✏️ Chỉnh sửa</a>
+                                    <a href="<?php echo get_permalink($wp_post_id); ?>" class="gacg-btn gacg-btn-sm" target="_blank">👁️ Xem</a>
+                                <?php else: ?>
+                                    <span style="color: #ffc107;">⚠️ Không tìm thấy bài viết</span>
                                 <?php endif; ?>
                             <?php else: ?>
                                 <span style="color: #6c757d;">-</span>

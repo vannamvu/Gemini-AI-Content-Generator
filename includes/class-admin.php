@@ -482,8 +482,64 @@ class GACG_Admin {
     public function ajax_bulk_create_posts() {
         check_ajax_referer('gacg_nonce', 'nonce');
         
-        // Implementation for bulk creation will be here
-        wp_send_json_success('Bulk creation feature coming soon');
+        $title = sanitize_text_field($_POST['title'] ?? '');
+        $category = intval($_POST['category'] ?? 0);
+        $publish_option = sanitize_text_field($_POST['publish_option'] ?? 'draft');
+        
+        if (empty($title)) {
+            wp_send_json_error('Tiêu đề không được để trống');
+        }
+        
+        // Log the start of generation process
+        $this->log_generation_action(0, 'content_generation', 'started', "Bắt đầu tạo nội dung cho: $title");
+        
+        // Generate content using Gemini API
+        $gemini_api = new GACG_Gemini_API();
+        $content = $gemini_api->generate_content($title);
+        
+        if (is_wp_error($content)) {
+            $this->log_generation_action(0, 'content_generation', 'failed', $content->get_error_message());
+            wp_send_json_error($content->get_error_message());
+        }
+        
+        if (empty($content) || strlen(trim($content)) < 50) {
+            $error_msg = 'Nội dung được tạo quá ngắn hoặc không hợp lệ';
+            $this->log_generation_action(0, 'content_generation', 'failed', $error_msg);
+            wp_send_json_error($error_msg);
+        }
+        
+        $this->log_generation_action(0, 'content_generation', 'completed', "Đã tạo nội dung cho: $title");
+        
+        // Create WordPress post
+        $post_status = ($publish_option === 'publish') ? 'publish' : 'draft';
+        
+        $post_data = array(
+            'post_title' => $title,
+            'post_content' => $content,
+            'post_status' => $post_status,
+            'post_author' => get_current_user_id(),
+            'post_type' => 'post'
+        );
+        
+        if ($category > 0) {
+            $post_data['post_category'] = array($category);
+        }
+        
+        $post_id = wp_insert_post($post_data);
+        
+        if (is_wp_error($post_id)) {
+            $this->log_generation_action(0, 'post_creation', 'failed', $post_id->get_error_message());
+            wp_send_json_error($post_id->get_error_message());
+        }
+        
+        $this->log_generation_action($post_id, 'post_creation', 'completed', "Đã tạo bài viết WordPress ID: $post_id");
+        
+        wp_send_json_success(array(
+            'post_id' => $post_id,
+            'edit_url' => admin_url('post.php?post=' . $post_id . '&action=edit'),
+            'view_url' => get_permalink($post_id),
+            'content' => $content
+        ));
     }
     
     /**
@@ -514,5 +570,27 @@ class GACG_Admin {
         } else {
             wp_send_json_error('Không thể hủy bài viết');
         }
+    }
+    
+    /**
+     * Log generation action to database
+     */
+    private function log_generation_action($post_id, $action, $status, $message, $processing_time = null) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'gacg_generation_log';
+        
+        $wpdb->insert(
+            $table_name,
+            array(
+                'post_id' => $post_id,
+                'action' => $action,
+                'status' => $status,
+                'message' => $message,
+                'processing_time' => $processing_time,
+                'created_at' => current_time('mysql')
+            ),
+            array('%d', '%s', '%s', '%s', '%f', '%s')
+        );
     }
 }

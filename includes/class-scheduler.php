@@ -143,12 +143,15 @@ class GACG_Scheduler {
             update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_data['seo_description']);
         }
         
-        // Cập nhật status thành published
+        // Cập nhật status thành published và lưu post_id
         $wpdb->update(
             $table_name,
-            array('status' => 'published'),
+            array(
+                'status' => 'published',
+                'meta_data' => json_encode(array_merge($meta_data, array('wp_post_id' => $post_id)))
+            ),
             array('id' => $scheduled_id),
-            array('%s'),
+            array('%s', '%s'),
             array('%d')
         );
         
