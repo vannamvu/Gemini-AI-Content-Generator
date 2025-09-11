@@ -67,6 +67,7 @@
             $(document).on('click', '.gacg-cancel-scheduled', this.cancelScheduledPost);
             $(document).on('click', '#test-api-connection', this.testApiConnection);
             $(document).on('click', '.gacg-retry-post', this.retryPost);
+            $(document).on('click', '.gacg-cancel-post', this.cancelPost);
             $(document).on('click', '#gacg-pause-processing', this.pauseProcessing);
             $(document).on('click', '#gacg-resume-processing', this.resumeProcessing);
         },
@@ -254,6 +255,10 @@
                                 `<button class="gacg-btn gacg-btn-sm gacg-retry-post" data-post-id="${post.id}">🔄 Thử lại</button>` : 
                                 ''
                             }
+                            ${(post.status === POST_STATUS.QUEUED || post.status === POST_STATUS.PROCESSING) ? 
+                                `<button class="gacg-btn gacg-btn-sm gacg-btn-secondary gacg-cancel-post" data-post-id="${post.id}">⏹️ Hủy</button>` : 
+                                ''
+                            }
                             ${post.status === POST_STATUS.COMPLETED && post.postId ? 
                                 `<a href="/wp-admin/post.php?post=${post.postId}&action=edit" class="gacg-btn gacg-btn-sm" target="_blank">✏️ Chỉnh sửa</a>` : 
                                 ''
@@ -375,20 +380,14 @@
                     'background-color': statusConfig.color
                 });
                 
-                // Update retry button
-                if (status === POST_STATUS.ERROR) {
-                    if ($item.find('.gacg-retry-post').length === 0) {
-                        $item.find('.post-actions').append(`<button class="gacg-btn gacg-btn-sm gacg-retry-post" data-post-id="${postId}">🔄 Thử lại</button>`);
-                    }
-                } else {
-                    $item.find('.gacg-retry-post').remove();
-                }
+                // Update action buttons
+                $item.find('.gacg-retry-post, .gacg-cancel-post, a[href*="post.php"], a[href*="?p="]').remove();
                 
-                // Add edit and view links for completed posts
-                if (status === POST_STATUS.COMPLETED && post.postId) {
-                    // Remove existing links first
-                    $item.find('a[href*="post.php"], a[href*="?p="]').remove();
-                    
+                if (status === POST_STATUS.ERROR) {
+                    $item.find('.post-actions').append(`<button class="gacg-btn gacg-btn-sm gacg-retry-post" data-post-id="${postId}">🔄 Thử lại</button>`);
+                } else if (status === POST_STATUS.QUEUED || status === POST_STATUS.PROCESSING) {
+                    $item.find('.post-actions').append(`<button class="gacg-btn gacg-btn-sm gacg-btn-secondary gacg-cancel-post" data-post-id="${postId}">⏹️ Hủy</button>`);
+                } else if (status === POST_STATUS.COMPLETED && post.postId) {
                     // Add edit link
                     $item.find('.post-actions').append(`<a href="/wp-admin/post.php?post=${post.postId}&action=edit" class="gacg-btn gacg-btn-sm" target="_blank">✏️ Chỉnh sửa</a>`);
                     
@@ -443,6 +442,24 @@
             }
         },
 
+        cancelPost: function(e) {
+            e.preventDefault();
+            var postId = parseInt($(this).data('post-id'));
+            var post = GACG.posts.find(p => p.id === postId);
+            
+            if (post && (post.status === POST_STATUS.QUEUED || post.status === POST_STATUS.PROCESSING)) {
+                post.status = POST_STATUS.CANCELLED;
+                post.endTime = Date.now();
+                GACG.updatePostStatus(postId, POST_STATUS.CANCELLED);
+                GACG.addLog(`⏹️ Đã hủy: "${post.title}"`);
+                
+                // If this was the current processing post, continue to next
+                if (GACG.currentIndex === postId && GACG.isProcessing) {
+                    GACG.processNext();
+                }
+            }
+        },
+
         pauseProcessing: function(e) {
             e.preventDefault();
             GACG.isProcessing = false;
@@ -466,10 +483,13 @@
             
             var completed = GACG.posts.filter(p => p.status === POST_STATUS.COMPLETED).length;
             var errors = GACG.posts.filter(p => p.status === POST_STATUS.ERROR).length;
+            var cancelled = GACG.posts.filter(p => p.status === POST_STATUS.CANCELLED).length;
             var total = GACG.posts.length;
             
             var totalTime = (Date.now() - GACG.startTime) / 1000 / 60; // minutes
             var completedPosts = GACG.posts.filter(p => p.status === POST_STATUS.COMPLETED);
+            
+            GACG.addLog(`🎉 Hoàn thành tất cả! ${completed}/${total} thành công, ${cancelled} đã hủy, ${errors} lỗi (${Math.round(totalTime)}m)`, 'success');
             
             GACG.addLog(`🎉 Hoàn thành tất cả! ${completed}/${total} thành công (${Math.round(totalTime)}m)`, 'success');
             
@@ -505,6 +525,7 @@
                         <div><strong>Tổng bài:</strong> ${total}</div>
                         <div><strong>Thành công:</strong> <span style="color: #28a745;">${completed}</span></div>
                         <div><strong>Lỗi:</strong> <span style="color: #dc3545;">${errors}</span></div>
+                        <div><strong>Đã hủy:</strong> <span style="color: #6c757d;">${cancelled}</span></div>
                         <div><strong>Thời gian:</strong> ${Math.round(totalTime)}m</div>
                         <div><strong>Tỷ lệ thành công:</strong> ${Math.round((completed/total)*100)}%</div>
                     </div>

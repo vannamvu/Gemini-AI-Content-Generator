@@ -502,6 +502,12 @@ class GACG_Admin {
             wp_send_json_error($content->get_error_message());
         }
         
+        if (empty($content) || strlen(trim($content)) < 50) {
+            $error_msg = 'Nội dung được tạo quá ngắn hoặc không hợp lệ';
+            $this->log_generation_action(0, 'content_generation', 'failed', $error_msg);
+            wp_send_json_error($error_msg);
+        }
+        
         $this->log_generation_action(0, 'content_generation', 'completed', "Đã tạo nội dung cho: $title");
         
         // Create WordPress post

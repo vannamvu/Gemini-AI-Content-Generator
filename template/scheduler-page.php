@@ -21,6 +21,7 @@ $scheduled_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY p
         $pending_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'pending'");
         $published_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'published'");
         $failed_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'failed'");
+        $cancelled_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'cancelled'");
         ?>
         <div class="gacg-stat-item">
             <span class="gacg-stat-number"><?php echo $pending_count; ?></span>
@@ -33,6 +34,10 @@ $scheduled_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY p
         <div class="gacg-stat-item">
             <span class="gacg-stat-number"><?php echo $failed_count; ?></span>
             <div class="gacg-stat-label">Thất bại</div>
+        </div>
+        <div class="gacg-stat-item">
+            <span class="gacg-stat-number"><?php echo $cancelled_count; ?></span>
+            <div class="gacg-stat-label">Đã hủy</div>
         </div>
     </div>
 

@@ -11,7 +11,8 @@ $stats = array(
     'total_scheduled' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled"),
     'pending_posts' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'pending'"),
     'published_posts' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'published'"),
-    'failed_posts' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'failed'")
+    'failed_posts' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'failed'"),
+    'cancelled_posts' => $wpdb->get_var("SELECT COUNT(*) FROM $table_scheduled WHERE status = 'cancelled'")
 );
 
 $recent_posts = $wpdb->get_results("SELECT * FROM $table_scheduled ORDER BY created_at DESC LIMIT 5");
@@ -41,6 +42,10 @@ $settings = get_option('gacg_settings', array());
         <div class="gacg-stat-item">
             <span class="gacg-stat-number"><?php echo $stats['failed_posts']; ?></span>
             <div class="gacg-stat-label">Thất bại</div>
+        </div>
+        <div class="gacg-stat-item">
+            <span class="gacg-stat-number"><?php echo $stats['cancelled_posts']; ?></span>
+            <div class="gacg-stat-label">Đã hủy</div>
         </div>
     </div>
 
