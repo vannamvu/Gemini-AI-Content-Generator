@@ -8,12 +8,9 @@
     const POST_STATUS = {
         QUEUED: 'queued',
         PROCESSING: 'processing', 
-        CONTENT_GENERATED: 'content_generated',
-        IMAGES_PROCESSING: 'images_processing',
-        SEO_OPTIMIZATION: 'seo_optimization',
-        PUBLISHING: 'publishing',
         COMPLETED: 'completed',
-        ERROR: 'error'
+        ERROR: 'error',
+        CANCELLED: 'cancelled'
     };
 
     // Status display config
@@ -26,33 +23,9 @@
         },
         [POST_STATUS.PROCESSING]: {
             icon: '⚡',
-            text: 'Bắt đầu xử lý',
+            text: 'Đang xử lý...',
             color: '#007bff',
-            progress: 10
-        },
-        [POST_STATUS.CONTENT_GENERATED]: {
-            icon: '📝',
-            text: 'Đã tạo nội dung',
-            color: '#28a745',
-            progress: 40
-        },
-        [POST_STATUS.IMAGES_PROCESSING]: {
-            icon: '🖼️',
-            text: 'Đang xử lý hình ảnh',
-            color: '#ffc107',
-            progress: 60
-        },
-        [POST_STATUS.SEO_OPTIMIZATION]: {
-            icon: '🎯',
-            text: 'Tối ưu SEO',
-            color: '#17a2b8',
-            progress: 80
-        },
-        [POST_STATUS.PUBLISHING]: {
-            icon: '📤',
-            text: 'Đang đăng bài',
-            color: '#fd7e14',
-            progress: 90
+            progress: 50
         },
         [POST_STATUS.COMPLETED]: {
             icon: '✅',
@@ -64,6 +37,12 @@
             icon: '❌',
             text: 'Có lỗi xảy ra',
             color: '#dc3545',
+            progress: 0
+        },
+        [POST_STATUS.CANCELLED]: {
+            icon: '⏹️',
+            text: 'Đã hủy',
+            color: '#6c757d',
             progress: 0
         }
     };
@@ -345,72 +324,26 @@
         },
 
         generateContentForPost: function(post) {
-            $.post(gacg_ajax.ajax_url, {
-                action: 'gacg_generate_content',
-                nonce: gacg_ajax.nonce,
-                title: post.title
-            }, function(response) {
-                if (response.success) {
-                    post.content = response.data.content;
-                    GACG.updatePostStatus(post.id, POST_STATUS.CONTENT_GENERATED);
-                    GACG.addLog(`✅ Đã tạo nội dung cho: "${post.title}"`);
-                    
-                    // Step 2: Process Images (if enabled)
-                    if ($('#gacg-image-count').val() > 0) {
-                        GACG.processImagesForPost(post);
-                    } else {
-                        GACG.optimizeSEOForPost(post);
-                    }
-                } else {
-                    GACG.handlePostError(post, response.data || 'Lỗi tạo nội dung');
-                }
-            }).fail(function() {
-                GACG.handlePostError(post, 'Lỗi kết nối khi tạo nội dung');
-            });
-        },
-
-        processImagesForPost: function(post) {
-            GACG.updatePostStatus(post.id, POST_STATUS.IMAGES_PROCESSING);
-            GACG.addLog(`🖼️ Đang xử lý hình ảnh cho: "${post.title}"`);
-            
-            // Simulate image processing (replace with actual implementation)
-            setTimeout(function() {
-                GACG.addLog(`✅ Đã xử lý hình ảnh cho: "${post.title}"`);
-                GACG.optimizeSEOForPost(post);
-            }, 2000);
-        },
-
-        optimizeSEOForPost: function(post) {
-            GACG.updatePostStatus(post.id, POST_STATUS.SEO_OPTIMIZATION);
-            GACG.addLog(`🎯 Đang tối ưu SEO cho: "${post.title}"`);
-            
-            // Simulate SEO optimization (replace with actual implementation)
-            setTimeout(function() {
-                GACG.addLog(`✅ Đã tối ưu SEO cho: "${post.title}"`);
-                GACG.publishPost(post);
-            }, 1000);
-        },
-
-        publishPost: function(post) {
-            GACG.updatePostStatus(post.id, POST_STATUS.PUBLISHING);
-            GACG.addLog(`📤 Đang đăng bài: "${post.title}"`);
-            
+            // Use the enhanced bulk creation endpoint that handles content generation and publishing
             var publishOption = $('#gacg-publish-option').val();
             var categoryId = $('#gacg-category').val();
             
             $.post(gacg_ajax.ajax_url, {
-                action: 'gacg_publish_post',
+                action: 'gacg_bulk_create_posts',
                 nonce: gacg_ajax.nonce,
                 title: post.title,
-                content: post.content,
                 category: categoryId,
                 publish_option: publishOption
             }, function(response) {
                 if (response.success) {
+                    post.content = response.data.content;
                     post.postId = response.data.post_id;
+                    post.editUrl = response.data.edit_url;
+                    post.viewUrl = response.data.view_url;
                     post.endTime = Date.now();
+                    
                     GACG.updatePostStatus(post.id, POST_STATUS.COMPLETED);
-                    GACG.addLog(`🎉 Hoàn thành: "${post.title}"`);
+                    GACG.addLog(`🎉 Hoàn thành: "${post.title}" - Bài viết ID: ${post.postId}`);
                     
                     // Process next post after a short delay
                     setTimeout(function() {
@@ -419,10 +352,10 @@
                         }
                     }, 1000);
                 } else {
-                    GACG.handlePostError(post, response.data || 'Lỗi đăng bài');
+                    GACG.handlePostError(post, response.data || 'Lỗi tạo bài viết');
                 }
             }).fail(function() {
-                GACG.handlePostError(post, 'Lỗi kết nối khi đăng bài');
+                GACG.handlePostError(post, 'Lỗi kết nối khi tạo bài viết');
             });
         },
 
@@ -451,10 +384,17 @@
                     $item.find('.gacg-retry-post').remove();
                 }
                 
-                // Add edit link for completed posts
+                // Add edit and view links for completed posts
                 if (status === POST_STATUS.COMPLETED && post.postId) {
-                    if ($item.find('a[href*="post.php"]').length === 0) {
-                        $item.find('.post-actions').append(`<a href="/wp-admin/post.php?post=${post.postId}&action=edit" class="gacg-btn gacg-btn-sm" target="_blank">✏️ Chỉnh sửa</a>`);
+                    // Remove existing links first
+                    $item.find('a[href*="post.php"], a[href*="?p="]').remove();
+                    
+                    // Add edit link
+                    $item.find('.post-actions').append(`<a href="/wp-admin/post.php?post=${post.postId}&action=edit" class="gacg-btn gacg-btn-sm" target="_blank">✏️ Chỉnh sửa</a>`);
+                    
+                    // Add view link
+                    if (post.viewUrl) {
+                        $item.find('.post-actions').append(`<a href="${post.viewUrl}" class="gacg-btn gacg-btn-sm" target="_blank">👁️ Xem</a>`);
                     }
                 }
                 
@@ -467,6 +407,15 @@
             post.endTime = Date.now();
             GACG.updatePostStatus(post.id, POST_STATUS.ERROR);
             GACG.addLog(`❌ Lỗi "${post.title}": ${errorMessage}`, 'error');
+            
+            // Update error display in the post item
+            var $item = $(`.post-progress-item[data-post-id="${post.id}"]`);
+            var $errorDiv = $item.find('.post-error');
+            if ($errorDiv.length === 0) {
+                $item.append(`<div class="post-error" style="color: #dc3545; font-size: 12px; margin-top: 5px; padding: 5px; background: #f8d7da; border-radius: 3px;">❌ ${errorMessage}</div>`);
+            } else {
+                $errorDiv.html(`❌ ${errorMessage}`);
+            }
             
             // Continue with next post
             setTimeout(function() {
@@ -520,11 +469,33 @@
             var total = GACG.posts.length;
             
             var totalTime = (Date.now() - GACG.startTime) / 1000 / 60; // minutes
+            var completedPosts = GACG.posts.filter(p => p.status === POST_STATUS.COMPLETED);
             
             GACG.addLog(`🎉 Hoàn thành tất cả! ${completed}/${total} thành công (${Math.round(totalTime)}m)`, 'success');
             
             // Hide control buttons
             $('.gacg-progress-controls').hide();
+            
+            // Create completed posts list
+            var completedPostsHtml = '';
+            if (completedPosts.length > 0) {
+                completedPostsHtml = `
+                    <div style="margin-top: 15px;">
+                        <h5>📝 Bài viết đã tạo thành công:</h5>
+                        <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                            ${completedPosts.map(post => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #eee;">
+                                    <span style="flex: 1;">${post.title}</span>
+                                    <div>
+                                        <a href="/wp-admin/post.php?post=${post.postId}&action=edit" target="_blank" style="margin-right: 5px; color: #0073aa;">✏️ Chỉnh sửa</a>
+                                        ${post.viewUrl ? `<a href="${post.viewUrl}" target="_blank" style="color: #0073aa;">👁️ Xem</a>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
             
             // Show summary
             var summaryHtml = `
@@ -537,6 +508,7 @@
                         <div><strong>Thời gian:</strong> ${Math.round(totalTime)}m</div>
                         <div><strong>Tỷ lệ thành công:</strong> ${Math.round((completed/total)*100)}%</div>
                     </div>
+                    ${completedPostsHtml}
                 </div>
             `;
             
